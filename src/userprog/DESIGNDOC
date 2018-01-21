@@ -1,0 +1,317 @@
+		     +--------------------------+
+		     |            OS            |
+		     | PROJECT 2: USER PROGRAMS |
+		     |     DESIGN DOCUMENT      |
+		     +--------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Kevin Vong <s8kevong@stud.uni-saarland.de>
+Kaleem Ullah <s8kaulla@stud.uni-saarland.de>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			   ARGUMENT PASSING
+			   ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do
+>> you arrange for the elements of argv[] to be in the right order?
+>> How do you avoid overflowing the stack page?
+
+To implement argument parsing, we split the given command line into tokens,
+delimited by spaces, using the suggested strtok_r function. To put the args
+in the right order, we pushed the argument values from left to right first.
+After that, we looped backwards through the arguments and pushed the
+addresses onto the stack. This ensured that the last argument address
+pushed on the stack was actually argv[0], the next was argv[1], and etc.
+To avoid overflowing the stack page, we added a check for the size of
+the args. We only allow arguments that fit within a 4kB page.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+The method strtok() uses a global variable to keep track of the current
+position in the given string. With Pintos, we can have multiple threads
+that might be accessing the string at once, which would mess up this
+global pointer. Thus, strtok_r() is the only implementation because
+it ensures that each thread keeps track of its own position within the
+string.
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+One advantage is that the kernel has to do less processing in order to
+separate the commands. Although the load is transferred onto the shell,
+saving computational time for the kernel thread is always nice. Another
+advantage is that the shell can parse the command line into more advanced
+calls to the kernels. For example, in Unix systems, you can chain
+multiple executables by piping with '|'.
+
+			     SYSTEM CALLS
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+IN SYSCALL.C:
+struct lock filesys_mutex;
+This is used for synchronization regarding file i/o system calls.
+
+IN THREAD.H:
+struct file *exefile
+This is used to deny writes to a file being used as an executable.
+
+bool parent_wait
+This is used to tell a child process that it needs to inform its parent
+when it is done executing.
+
+int child_status
+This indicates to the parent thread whether its child loaded successfully
+or not. Used in exec().
+
+struct semaphore child_sema
+Used to wait for a child process to finish executing. Used in process_wait().
+
+struct semaphore child_load_sema
+Used to wait for a child process to finish loading. Used in exec().
+
+struct list childlist
+Used to track status values of child processes. Also allows a parent
+to wait for an already dead child thread. Used in exit() and wait()
+
+struct thread *parent
+Used to access the parent thread's childlist, updating its values.
+Used in exit() and exec().
+
+struct file_record
+{
+ struct file *cfile;
+ struct list_elem elem;
+ int fd;
+};
+Used in a struct list to keep track of all files that a process has open.
+Used in all file i/o system calls.
+
+struct child_record
+{
+ int retVal;
+ struct thread *child;
+ int id;
+ bool waiting;
+ struct list_elem elem; 
+};
+Used in a struct list to keep track of all children processes of a process.
+Used in wait().
+
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+File descriptors are kept in a list, exclusive to each process. This means
+that one process cannot use another process's fd to read from the same file.
+An open file can also have more than one file descriptor, if a process
+opens the same file multiple times.
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+To read user data, we first check the validity of the arguments the user
+passes in. Then, we grab the file system lock to ensure correct
+syncronization. Next, we find the desired file and read from it. 
+To write user data, we again check the validity of the user's arguments
+and grab the file system lock. We find the desired file and write to it.
+Notably, we do not allow reads from stdout or writes to stdin because
+that would result in the kernel waiting forever for input.
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+The least number of inspections is 1, if the first address that we check
+is located in the kernel address space and is deemed invalid. This will
+kill the current thread trying to access the illegal memory. The greatest
+number of inspections is 4096, where we have to check every single address
+to ensure that it is legal to access. 
+For a system call that only copies two bytes, the least is 1 and the
+greatest is 2, for the same reason as above.
+As for room for improvement, these numbers could be reduced to a maximum
+of two page table inspections. However, this would only occur in the
+case where the kernel already knows how large the data is, before
+beginning to copy it. There might be cases where the user keeps copying
+1 byte of data, until they try to copy the final byte into an illegal
+address. In this case, we cannot reduce these numbers because we need
+to check every address from the user.
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+Our wait system call keeps track of a list of child processes, ensuring
+that a process can only wait for its children. When a child process
+terminates, it checks if its parent is still running. If so, it updates
+the information in its parent's child list, so that the parent
+can access its return status even after the child has exited. A child
+process also checks if its parent is currently waiting for it, in which
+case it will sema_up its parent's semaphore to signal that it is done.
+Parent processes check if their children are dead. If so, then they
+retrieve their dead child's return status from their child list. Otherwise,
+they will wait for their semaphore to be incremented before proceeding.
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+To combat having a mess of memory access checking, we factored out a lot
+of checks into separate functions. For instance, the parse_args() function
+also checks if the stack pointer is a valid address. Other functions, like
+valid_ptr, valid_buf, and valid_string, are all called together before
+a system call's important code is executed -- making it obvious what
+our code is doing before moving on to actually executing a system call.
+
+When an error is detected, we either return an error value (i.e. -1) or
+use the exit system call. In the exit system call, we free all resources
+that were allocated, such as the child list entries and the fd list entries.
+Note that the fd list entries are not explicitly freed in the exit system
+call, because close() is explicitly called for each fd when a process
+exits. 
+
+A strategy we used to keep track of what resources to free was to
+use TODOs in our code, reminding us of times that we allocated resources.
+This meant that when we looked over our code, we were reminded
+that we needed to free these resources when the process terminated. This
+was really helpful since we added multiple allocated resources over the
+development process.
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+In our thread structure, we have a semaphore used to indicate
+whether the child is done loading or not, and an integer representing
+its load status. Since the parent waits for its child to sema_up the
+semaphore, it waits for the child to finish loading. After this,
+it checks the child's status -- if it was updated to -1, then the parent
+knows the child did not successfully load. If it was updated to 1, then
+the parent knows the child was successful.
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+If P waits for C before C exits, then it will wait for a semaphore
+to be incremented by C. This is done in exit(), where C will check
+if its parent P is waiting, and increment the semaphore if so. If P
+waits for C after C exits, then we have a list of children and their
+exit statuses inside P's struct thread that we can check.
+
+To ensure resources are freed, we consider each thread responsible
+for its own struct thread. This means that allocated structures such
+as a thread's child list or fd list are all freed by the thread
+once it exits. We also synchronize processes so that a parent will
+wait for its child to load before proceeding.
+
+If P terminates without waiting before C exits, then C will see that
+its parent thread is dead once it checks. This means that c will exit
+without worrying about updating its parent. If P terminates without
+waiting after C exits, then there are no problems as neither P nor C
+were waiting for the other process and thus do not have to provide info
+to the other process.
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+Having a separate function made it a lot easier to understand what
+we were doing, and prevented a lot of code reusing. We decided to
+implement user memory access by checking the pointer's validity first
+(i.e. checking if it was a user address and if it was in the pagedir),
+since it was much easier for us. The other way did have the advantage
+of faster runtimes, but we had issues implementing it.
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+Our design for file descriptors makes it very easy to check if a process
+can read from a given fd or not -- we just check its list of files. It
+was also fairly easy to implement, since we used the existing list
+implementation in the provided code. Freeing the list was also very simple,
+since close() frees each fd and close() is called implicitly when a
+process ends.
+
+One disadvantage was that we had to allocate memory for the fd list, which
+could cause a problem if a process wants to open a lot of files at once.
+Another disadvantage is the slow lookup time for an fd, as we have to
+traverse a linked list to see whether an fd is valid to read from or not.
+This adds a lot of overhead runtime that we would rather not have.
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
+We did not change it; we found that it worked just fine for our
+purposes.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

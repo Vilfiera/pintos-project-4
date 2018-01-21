@@ -1,0 +1,235 @@
+			+--------------------+
+			|         OS         |
+			| PROJECT 1: THREADS |
+			|   DESIGN DOCUMENT  |
+			+--------------------+
+				   
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Kevin Vong <s8kevong@stud.uni-saarland.de>
+Kaleem Ullah <s8kaulla@stud.uni-saarland.de>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+  We consulted the following source for the rand() function in narrow-
+  bridge.c:
+  https://stackoverflow.com/questions/7602919/
+  how-do-i-generate-random-numbers-without-rand-function
+
+			     ALARM CLOCK
+			     ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+    int64_t sleep_until;
+    New member of struct thread in thread.h. Keeps track of
+    how many timer ticks the thread needs to sleep for.
+
+    static struct list sleeping_list;
+    New global variable in thread.c. A sorted list of sleeping
+    threads. Used to wake up sleeping threads when they have slept
+    long enough.
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
+  When timer_sleep() is called, the thread stores the desired
+  number of timer ticks to sleep. It is then blocked until enough
+  ticks have passed. The timer interrupt handler manages this, checking
+  the threads in the sleeping_list every timer tick and checking if 
+  any threads need to be woken up.
+  
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+  The list of sleeping threads is sorted in ascending order of wake
+  up time. When the timer interrupt handler checks the list for
+  threads that need to be woken up, it starts with the thread with
+  the earliest wake-up time. If it comes across a thread that has
+  not slept long enough, it stops checking the list because all
+  following threads still need to sleep as well. This prevents
+  us from checking the entire list everytime the timer interrupt
+  handler runs, minimizing the time spent in the function.
+
+---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+  The current timer ticks are recorded immediately to be put into
+  the struct thread. Since we store this data immediately, it's
+  impossible for any other thread to negatively impact the desired
+  amount of sleeping time for the current thread.
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+  This is combated in the same way. The timer ticks are stored immediately,
+  so any interrupts will not have a negative effect on how long the thread
+  will sleep. If we executed other instructions before recording the
+  current timer ticks, the function might get interrupted and delay
+  the timer countdown for the current thread. Storing the timer ticks
+  at the start of the function ensures that the thread does not
+  unexpectedly sleep longer than it should.
+
+---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+  At first, we considered ways of implementing the timer_sleep function
+  without adding any elements to the existing structs. However, this proved
+  impossible, since there was no way for us to keep track of the time
+  elapsed and which threads needed to be woken up. Adding a new member
+  to the struct thread solved this. The sorted waiting list is also
+  superior to an unsorted one, as it means we can save time during
+  the timer interrupt handler. This is very important since the timer
+  interrupt handler runs very often.
+
+    		     PROD/CONS
+	  		     =========
+
+---- SYNCHRONIZATION ----
+
+>> B1: How does your solution guarantee that consumers will hold until
+>> there is something to consume in the buffer?
+  There is a while loop that checks if n (a variable tracking the number
+  of characters in the buffer) is 0. If so, it waits on a condition variable
+  not_empty. This ensures that the consumer always waits for characters
+  to be in the buffer before attempting to consume them.
+
+>> B2: How does your solution guarantee that producers will hold until
+>> there is some free space in the buffer?
+  Like the consumers, the producers also have a while loop that checks
+  if n is equal to the size of the buffer. If so, it waits on a condition
+  variable not_full. This ensures that the producer waits for there to be
+  room in the buffer before attempting to place more characters inside.
+  Not_full is also signaled at the start of the producer consumer function
+  to start the process.
+
+>> B3: How does your solution preserve a FIFO semantics i.e., the first
+>> character produced will be the first to be consumed?
+  There are two variables, head and tail, that track the buffer positions
+  where characters are inserted and removed, respectively. Consumers take
+  characters from the tail, while producers insert characters at the head.
+  This means that the buffer acts like a FIFO circular array, where
+  the first characters inserted are the first characters consumed.
+
+---- RATIONALE ----
+
+>> B4: Give an intuition for why your program preserves safety.
+  Before n, head, or tail are checked/changed, a lock must be acquired.
+  Since only one thread can have the lock at any time, only one thread
+  can change/access these variables at any time. This ensures that
+  other threads cannot violate the safety of accessing these variables.
+
+>> B5: Why did you choose this design? Did you consider other design 
+>> alternatives? In what ways is it superior to another design you considered?
+  We chose this design because of the incredibly helpful example code
+  found in the monitors section of the reference guide. The project spec
+  also stated that locks and condition variables must be used, so monitors
+  were the perfect solution to this producer consumer problem. This design
+  resulted in an easily understandable solution for us.
+
+			     NARROW BRIDGE
+			     =============
+
+---- SYNCHRONIZATION ----
+
+>> C1: How does your solution guarantee that no more that 3 vehicles 
+>> are crossing the bridge in the same direction?
+  When a vehicle arrives at the bridge, it checks how many active vehicles
+  are currently on the bridge, either through the activeL var or through
+  the activeR var. If the number of active vehicles on the bridge is 3
+  or more, the vehicle waits for its respective semaphore (depending on
+  its direction and priority) to be incremented.  
+
+>> C2: What prevents vehicles from opposite directions from crossing the
+>> bridge simultaneously?
+  When a vehicle arrives at the bridge, it checks what direction the
+  vehicles currently on the bridge are traveling. For example, a car
+  traveling right will check the activeL variable to see if any cars
+  are currently traveling left on the bridge. If so, the vehicle waits
+  until it is safe to cross the bridge (i.e. when no vehicles are
+  traveling the opposite direction on the bridge).
+
+>> C3: How does your solution grant priority to emergency vehicles over
+>> the queue of vehicles ahead in the same direction?
+  In the arrival function, vehicles check the direction and number of
+  vehicles on the bridge. If these conditions are safe, then normal
+  vehicles also check if there are any waiting emergency vehicles. If there
+  are any emergency vehicles, even ones traveling the opposite direction,
+  the vehicle will wait for the emergency vehicles to enter the bridge first.
+  On the other hand, emergency vehicles only check if the bridge is safe
+  to cross -- since they don't need to care about normal vehicles waiting.
+
+>> C4: How do you guarantee that despite having priority, emergency vehicles
+>> do not start crossing the bridge while there are still vehicles crossing
+>> it in the oposite direction?
+  Emergency vehicles still check if vehicles crossing the bridge are
+  traveling in the same direction, using the activeL or activeR vars.
+  If the direction of travel is not safe, even emergency vehicles will
+  wait until crossing the bridge is safe.  
+
+>> C5: Explain with examples why your solution does not preserve neither 
+>> fairness nor freedom from starvation, other than what has been indicated 
+>> for emergency vehicles.
+  When a vehicle arrives at the bridge and waits for its turn to cross, it
+  waits for a semaphore to be incremented. This semaphore is incremented
+  when a vehicle exits the bridge. However, it's not guaranteed that the
+  first vehicle to wait at the bridge will be the first vehicle allowed
+  to cross, since the first vehicle to grab the semaphore will cross.
+  This results in fairness not being preserved. Starvation is also not 
+  preserved, since emergency vehicles always take priority. This means
+  that normal vehicles may end up waiting egregious amounts of time
+  if emergency vehicles keep arriving at the bridge.
+
+---- RATIONALE ----
+
+>> C6: Why did you choose this design? Did you consider other design 
+>> alternatives? In what ways is it superior to another design you considered?
+  Initially, we considered only having one semaphore to signal whether
+  or not it was okay for a vehicle to cross the bridge. However, we ran
+  into major problems when we had waiting vehicles traveling in opposite
+  directions. With only one semaphore, a vehicle waiting to travel right
+  may be allowed onto the bridge while vehicles are still traveling left.
+  We refined our approach by adding another semaphore, so we could
+  differentiate between left and right traveling vehicles. This brought
+  us to another problem, however -- we could not ensure that emergency
+  vehicles would be allowed onto the bridge first. Thus, we ended up
+  using four semaphores, ELSem, LSem, ERSem, and RSem. These semaphores
+  allowed us to get the behavior that was required.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future semesters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the semester.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future semesters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future semesters or the remaining projects?
+
+>> Any other comments?
