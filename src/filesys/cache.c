@@ -27,6 +27,7 @@ void cache_init(){
 	for (i = 0; i < BUFFER_CACHE; ++i){
 		cache[i].occupied = false;
 	}
+  thread_create("periodically_flush_cache", 0, cache_periodic_write, NULL);
 }
 
 //flush the given entry back to required disk_sector
@@ -67,7 +68,6 @@ static struct cache_entry* cache_lookup (block_sector_t sector){
 			return &(cache[i]);
 		}
 		//cache miss
-		return NULL; 
 	}
 return NULL;
 }
@@ -112,6 +112,10 @@ void cache_read(block_sector_t sector, void *target){
 		slot->disk_sector = sector;
 		slot->dirty = false;
 		block_read(fs_device, sector, slot->buffer);
+/*
+  block_read(fs_device, sector, target);
+	lock_release(&mutex);
+  return;*/
 	}
 	//copy data from cahce slot to memory
 	slot->lru = true;
@@ -130,6 +134,11 @@ void cache_write(block_sector_t sector, const void *source){
 		slot->disk_sector = sector;
 		slot->dirty = false;
 		block_read(fs_device, sector, slot->buffer);
+/* 
+  block_write(fs_device, sector, source);
+	lock_release(&mutex);
+  return;
+*/
 	}
 	slot->lru = true;
 	slot->dirty = true;
@@ -137,3 +146,21 @@ void cache_write(block_sector_t sector, const void *source){
 	lock_release(&mutex);
 }
 
+void cache_periodic_write (void *aux UNUSED) {
+  while (true) {
+    flush_entire_cache();
+    timer_sleep(5000);
+  }
+}
+
+void flush_entire_cache() {
+  lock_acquire(&mutex);
+  int i;
+  for (i = 0; i < BUFFER_CACHE; i++) {
+    if (!cache[i].occupied) {
+      continue;
+    }
+    cache_flush(&(cache[i]));
+  }
+  lock_release(&mutex);
+}
