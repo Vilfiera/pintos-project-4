@@ -1,4 +1,3 @@
-
 #include "filesys/directory.h"
 #include <stdio.h>
 #include <string.h>
@@ -58,12 +57,6 @@ void separate_path (const char *path, char *dir, char *filename){
 	memcpy (filename, last_token, sizeof (char) * (strlen(last_token) + 1));
 	free(temp_path);
 }
-
-
-
-
-
-
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
@@ -80,7 +73,6 @@ dir_create (block_sector_t sector, size_t entry_cnt)
 		success = false;
 	}
 	dir_close (dir);
-
 	return success;
 }
 
@@ -165,7 +157,6 @@ struct dir * open_dir (const char *path){
 	}
 	return cur_dir;
 }
-
 /* Opens and returns a new directory for the same inode as DIR.
    Returns a null pointer on failure. */
 struct dir *
@@ -189,7 +180,6 @@ dir_close (struct dir *dir)
 struct inode *
 dir_get_inode (struct dir *dir) 
 {
-
   return dir->inode;
 }
 
@@ -205,10 +195,8 @@ lookup (const struct dir *dir, const char *name,
   struct dir_entry e;
   size_t ofs;
   
-
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
 
   for (ofs = sizeof e; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
@@ -239,8 +227,6 @@ bool isEmpty (const struct dir *dir)
 	}
 	return true;
 }
-
-
 /* Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
    On success, sets *INODE to an inode for the file, otherwise to
@@ -277,13 +263,11 @@ dir_lookup (const struct dir *dir, const char *name,
 /* Adds a file named NAME to DIR, which must not already contain a
    file by that name.  The file's inode is in sector
    INODE_SECTOR.
-
-
    Returns true if successful, false on failure.
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool isDir)
 {
   struct dir_entry e;
   off_t ofs;
@@ -318,7 +302,6 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
      If there are no free slots, then it will be set to the
      current end-of-file.
      
-
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
@@ -399,7 +382,6 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
           strlcpy (name, e.name, NAME_MAX + 1);
           return true;
         } 
-
     }
   return false;
 }
