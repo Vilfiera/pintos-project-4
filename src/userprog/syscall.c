@@ -7,6 +7,10 @@
 #include "devices/shutdown.h"
 #include "filesys/off_t.h"
 #include "lib/string.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
 
 /* Typical return values from main() and arguments to exit(). */
 #define EXIT_SUCCESS 0          /* Successful execution. */
@@ -21,7 +25,12 @@ static void parse_args(void* esp, int* argBuf, int numToParse);
 static void valid_ptr(void* user_ptr);
 static void valid_buf(char* buf, unsigned size);
 static void valid_string(void* string);
-
+int inumber(int fd);
+bool isdir (int fd);
+bool readdir (int fd, char *name);
+bool mkdir (const char *filename);
+bool chdir (const char *filename);
+struct file_record * fileRd_ptr(int fd);
 void
 syscall_init (void) 
 {
@@ -103,10 +112,93 @@ syscall_handler (struct intr_frame *f)
 		parse_args(esp, &args[0], 1);
     close ((int) args[0]);
 		break;
+	case SYS_CHDIR:
+		parse_args (esp, &args [0], 1);
+		f->eax = mkdir ((const char *) args[0]);
+		break;
+	case SYS_READDIR:
+		parse_args (esp, &args[0], 2);
+		f->eax = readdir ((int) args[0], (char *) args[1]);
+		break;
+	case SYS_ISDIR:
+		parse_args (esp, &args[0], 1);
+		f->eax = isdir ((int) args[0]);
+		break;
+	case SYS_INUMBER:
+		parse_args(esp, &args[0], 1);
+		f->eax = inumber ((int) args[0]);
+		break;
 	default:	
     exit(-1);	
   }
   thread_yield();
+}
+
+
+bool chdir (const char *filename)
+{
+	bool result;
+	lock_acquire (&filesys_mutex);
+	result = changeDir (filename);
+	lock_release (&filesys_mutex);
+	return result;
+}
+
+bool mkdir (const char *filename)
+{
+	bool result;
+	lock_acquire (&filesys_mutex);
+	result = filesys_create (filename, 0, true);
+	lock_release (&filesys_mutex);
+	return result;
+}
+
+bool readdir (int fd, char *name)
+{
+	struct file_record *file_r;
+	struct file *file;
+	bool result;
+
+	lock_acquire (&filesys_mutex);
+	file_r = fileRd_ptr (fd);
+	if (file_r == NULL)
+	{
+		lock_release (&filesys_mutex);
+		return false;
+	}
+	file = file_r -> cfile;
+	struct inode *inode = file_get_inode (file);
+	if (inode == NULL)
+	{
+		lock_release (&filesys_mutex);
+		return false;
+	}
+	if (! inode_is_dir(inode))
+	{
+		lock_release (&filesys_mutex);
+		return false;
+	}
+	result = dir_readdir(file_r->dir, name);
+	lock_release(&filesys_mutex);
+	return result;
+}
+
+bool isdir (int fd)
+{
+	lock_acquire (&filesys_mutex);
+	struct file *file = file_ptr (fd);
+	bool result = inode_is_dir (file_get_inode(file));
+	lock_release(&filesys_mutex);
+	return result;
+}
+
+int inumber(int fd)
+{
+	lock_acquire (&filesys_mutex);
+	struct file *file = file_ptr(fd);
+	bool result = inode_get_inumber (file_get_inode(file));
+	lock_release(&filesys_mutex);
+	return result;
 }
 
 void halt (void) 
@@ -167,7 +259,7 @@ int wait (pid_t pid)
 bool create (const char *file, unsigned initial_size) 
 {
   lock_acquire(&filesys_mutex);
-  bool result = filesys_create(file, initial_size); 
+  bool result = filesys_create(file, initial_size, false);
   lock_release(&filesys_mutex);
   return result;
 }
@@ -338,6 +430,26 @@ struct file * file_ptr(int fd)
 
 }
 
+struct file_record * fileRd_ptr(int fd)
+{
+ struct thread *t = thread_current();
+ struct list *templist = &(t -> fd_entries);
+ struct file_record *tempfileRd;
+ struct list_elem *e;
+ if (list_empty(templist))
+	 return NULL;
+ for (e = list_begin (templist); e != list_end (templist);
+		 e = list_next (e))
+ {
+	 tempfileRd = list_entry (e, struct file_record, elem);
+	 if (tempfileRd->fd == fd)
+	 {
+		 return tempfileRd;
+	 }
+ }
+ return NULL;
+}
+
 static void parse_args(void* esp, int* argBuf, int numToParse) {
   int i;
   for (i = 0; i < numToParse; i++) {
@@ -367,4 +479,5 @@ static void valid_string(void* string) {
     valid_ptr(string);
   }
 }
+
 

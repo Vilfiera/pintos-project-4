@@ -61,14 +61,14 @@ filesys_create (const char *name, off_t initial_size, bool isDir)
   //separate path
   char directory [strlen(name)];
   char file_name [strlen(name)];
-  separate_filenamePath (name, directory, file_name);
-  struct dir *dir = dir_open_path (directory);
+  separate_path (name, directory, file_name);
+  struct dir *dir = open_dir (directory);
 
 
 
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_sizem isDir)
+                  && inode_create (inode_sector, initial_size, isDir)
                   && dir_add (dir, name, inode_sector, isDir));
 
   if (!success && inode_sector != 0) 
@@ -91,8 +91,8 @@ filesys_open (const char *name)
 
   char directory [name_len + 1];
   char file_name [name_len + 1];
-  separate_filenamePath (name, directory, file_name);
-  struct dir *dir = dir_open_path (directory);
+  separate_path (name, directory, file_name);
+  struct dir *dir = open_dir (directory);
   struct inode *inode = NULL;
 
 
@@ -106,10 +106,10 @@ filesys_open (const char *name)
   else
 	  inode = dir_get_inode (dir);
   
-  if (!inode == NULL || inode_is_removed (inode))
+  if (inode == NULL || inode_is_removed (inode))
 	  return NULL;
-  
-  return file_open (inode);
+  struct file *file = file_open (inode);
+  return file;
 }
 
 /* Deletes the file named NAME.
@@ -121,9 +121,9 @@ filesys_remove (const char *name)
 {
   char directory [strlen(name)];
   char file_name [strlen(name)];
-  separate_filenamePath (name, directory, file_name);
+  separate_path (name, directory, file_name);
 
-  struct dir *dir = dir_open_path (directory);
+  struct dir *dir = open_dir (directory);
 
   bool success = (dir != NULL && dir_remove (dir, file_name));
   dir_close (dir); 
@@ -136,7 +136,7 @@ filesys_remove (const char *name)
 //change current directory
 bool changeDir (const char *name)
 {
-	struct dir *dir = dir_open_path (name);
+	struct dir *dir = open_dir(name);
 	if (dir == NULL)
 		return false;
 	struct thread *t = thread_current();

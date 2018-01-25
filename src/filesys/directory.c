@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
@@ -39,8 +40,8 @@ void separate_path (const char *path, char *dir, char *filename){
 	
 	//tokenize
 	char *token, *temp, *last_token = "";
-	for (token = strtok_r (temp_path, "/", &p); token != NULL; 
-				token = strtok_r (NULL, "/", &p))
+	for (token = strtok_r (temp_path, "/", &temp); token != NULL;
+				token = strtok_r (NULL, "/", &temp))
 	{
 			
 		
@@ -219,7 +220,7 @@ bool isEmpty (const struct dir *dir)
 	struct dir_entry e;
 	off_t ofs;
 	
-	for (ofs = sizeof e; inode_read_at (dir->inode, &e, ofs) == sizeof e;
+	for (ofs = sizeof e; inode_read_at (dir->inode, &e,sizeof e, ofs) == sizeof e;
 			ofs += sizeof e)
 	{
 		if (e.in_use)
@@ -288,14 +289,14 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
  if (isDir)
  {
 	 struct dir *childDir = dir_open (inode_open (inode_sector));
-	 if (child_dir == NULL) goto done;
+	 if (childDir == NULL) goto done;
 	 e.inode_sector = inode_get_inumber (dir_get_inode(dir));
-	 if (inode_write_at (child_dir -> inode, &e, sizeof e, 0) != sizeof e)
+	 if (inode_write_at (childDir -> inode, &e, sizeof e, 0) != sizeof e)
 	 {
-		 dir_close (child_dir);
+		 dir_close (childDir);
 		 goto done;
 	 }
-	 dir_close (child_dir);
+	 dir_close (childDir);
  }
  
   /* Set OFS to offset of free slot.
@@ -344,7 +345,7 @@ dir_remove (struct dir *dir, const char *name)
     goto done;
 
 //do not allow to remove non-empty directory
- if (inode_is_directory (inode))
+ if (inode_is_dir (inode))
  {
 	 struct dir *target = dir_open (inode);
 	 bool emptyDir = isEmpty (target);
