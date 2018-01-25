@@ -128,6 +128,10 @@ syscall_handler (struct intr_frame *f)
 		parse_args(esp, &args[0], 1);
 		f->eax = inumber ((int) args[0]);
 		break;
+	case SYS_MKDIR:
+		parse_args (esp, &args[0], 1);
+		f->eax = mkdir ((const char *)args[0]);
+		break;
 	default:	
     exit(-1);	
   }
