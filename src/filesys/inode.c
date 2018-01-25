@@ -19,13 +19,13 @@
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     
     block_sector_t direct_blocks[INODE_NUM_DIRECT_BLOCKS];               /* Direct block pointers */
     block_sector_t single_indirect_block;
     block_sector_t double_indirect_block;             
+    bool isDir;
   };
 
 struct indirect_block {
@@ -143,7 +143,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length) //TODO:add dir bool
+inode_create (block_sector_t sector, off_t length, bool isDir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -160,7 +160,7 @@ inode_create (block_sector_t sector, off_t length) //TODO:add dir bool
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
-      //disk_inode->is_dir = dir;
+      disk_inode->isDir = isDir;
       if (inode_alloc(disk_inode, disk_inode->length)) {
         cache_write(sector, disk_inode);
         success = true; 
@@ -598,4 +598,12 @@ static bool inode_free_indirect(block_sector_t block, size_t sectors_to_free,
 
 static uint32_t min(uint32_t x, uint32_t y) {
   return x < y ? x : y;
+}
+
+bool inode_is_removed(struct inode *inode) {
+  return inode->removed;
+}
+
+bool inode_is_dir(struct inode *inode) {
+  return inode->data.isDir;
 }
