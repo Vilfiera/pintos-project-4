@@ -96,25 +96,25 @@ syscall_handler (struct intr_frame *f)
 		break;
 	case SYS_WRITE:
 		parse_args(esp, &args[0], 3);
-    valid_ptr(args[1]);
-    valid_buf((char*) args[1], (unsigned) args[2]);
-	  f->eax = write((int) args[0], (const void*) args[1], (unsigned) args[2]);
+    		valid_ptr(args[1]);
+    		valid_buf((char*) args[1], (unsigned) args[2]);
+	  	f->eax = write((int) args[0], (const void*) args[1], (unsigned) args[2]);
 		break;
 	case SYS_SEEK:
 		parse_args(esp, &args[0], 2);
-    seek ((int) args[0], (unsigned) args[1]);
+    		seek ((int) args[0], (unsigned) args[1]);
 		break;
 	case SYS_TELL:
 		parse_args(esp, &args[0], 1);
-    f->eax = tell ((int) args[0]);
+    		f->eax = tell ((int) args[0]);
 		break;
 	case SYS_CLOSE:
 		parse_args(esp, &args[0], 1);
-    close ((int) args[0]);
+    		close ((int) args[0]);
 		break;
 	case SYS_CHDIR:
 		parse_args (esp, &args [0], 1);
-		f->eax = mkdir ((const char *) args[0]);
+		f->eax = chdir ((const char *) args[0]);
 		break;
 	case SYS_READDIR:
 		parse_args (esp, &args[0], 2);
