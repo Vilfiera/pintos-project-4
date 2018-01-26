@@ -74,25 +74,25 @@ syscall_handler (struct intr_frame *f)
     break;
 	case SYS_REMOVE:
 		parse_args(esp, &args[0], 1);
-    valid_ptr(args[0]);
-    valid_string((void*) args[0]);
-    f->eax = remove ((const char*) args[0]);
+    		valid_ptr(args[0]);
+    		valid_string((void*) args[0]);
+    		f->eax = remove ((const char*) args[0]);
 		break;
 	case SYS_OPEN:
 		parse_args(esp, &args[0], 1);
-    valid_ptr(args[0]);
-    valid_string((void*) args[0]);
-    f->eax = open ((const char*) args[0]);
+    		valid_ptr(args[0]);
+    		valid_string((void*) args[0]);
+    		f->eax = open ((const char*) args[0]);
 		break;
 	case SYS_FILESIZE:
 		parse_args(esp, &args[0], 1);
-    f->eax = filesize ((int) args[0]);
+    		f->eax = filesize ((int) args[0]);
 		break;
 	case SYS_READ:
 		parse_args(esp, &args[0], 3);
-    valid_ptr(args[1]);
-    valid_buf((char*) args[1], (unsigned)args[2]);
-    f->eax = read ((int) args[0], (void*) args[1], (unsigned) args[2]);
+    		valid_ptr(args[1]);
+    		valid_buf((char*) args[1], (unsigned)args[2]);
+    		f->eax = read ((int) args[0], (void*) args[1], (unsigned) args[2]);
 		break;
 	case SYS_WRITE:
 		parse_args(esp, &args[0], 3);
