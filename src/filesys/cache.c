@@ -27,7 +27,6 @@ void cache_init(){
 	for (i = 0; i < BUFFER_CACHE; ++i){
 		cache[i].occupied = false;
 	}
-  thread_create("periodically_flush_cache", 0, cache_periodic_write, NULL);
 }
 
 //flush the given entry back to required disk_sector
@@ -146,21 +145,6 @@ void cache_write(block_sector_t sector, const void *source){
 	lock_release(&mutex);
 }
 
-void cache_periodic_write (void *aux UNUSED) {
-  while (true) {
-    flush_entire_cache();
-    timer_sleep(5000);
-  }
-}
 
-void flush_entire_cache() {
-  lock_acquire(&mutex);
-  int i;
-  for (i = 0; i < BUFFER_CACHE; i++) {
-    if (!cache[i].occupied) {
-      continue;
-    }
-    cache_flush(&(cache[i]));
-  }
-  lock_release(&mutex);
-}
+
+
