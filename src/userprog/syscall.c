@@ -44,7 +44,7 @@ get_user (const uint8_t *uaddr)
        : "=&a" (result) : "m" (*uaddr));
   return result;
 }
- 
+
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
    Returns true if successful, false if a segfault occurred. */
@@ -232,7 +232,7 @@ int inumber(int fd)
 {
 	lock_acquire (&filesys_mutex);
 	struct file *file = file_ptr(fd);
-	bool result = inode_get_inumber (file_get_inode(file));
+	int result = inode_get_inumber (file_get_inode(file));
 	lock_release(&filesys_mutex);
 	return result;
 }
@@ -325,6 +325,13 @@ int open (const char *file)
   }
   struct thread *t = thread_current();
   cfileRecord -> cfile = currentfile;
+  //handle directory
+  struct inode *inode = file_get_inode (cfileRecord -> cfile);
+  if (inode != NULL && inode_is_dir (inode))
+  {
+	  cfileRecord->dir = dir_open (inode_reopen(inode));
+  }
+  else cfileRecord->dir = NULL;
   cfileRecord -> fd = t -> total_fd;
   t -> total_fd = t -> total_fd + 1;
   list_push_back(&(t-> fd_entries), &(cfileRecord ->elem));
