@@ -129,6 +129,8 @@ struct dir * open_dir (const char *path){
 	
 	
 	//traverse and tokenize the tree
+if (strlen (path) > 0)
+{
 	char *token, *p;
 	for (token = strtok_r (temp_path, "/", &p); token != NULL;
 						token = strtok_r (NULL, "/", &p))
@@ -149,6 +151,7 @@ struct dir * open_dir (const char *path){
 		cur_dir = next_dir;
 			
 	}
+}
 	
 	//do not allowed opening removed directories
 	if (inode_is_removed (dir_get_inode (cur_dir)))
@@ -253,7 +256,9 @@ dir_lookup (const struct dir *dir, const char *name,
 	else if (lookup (dir, name, &e, NULL))
 		*inode = inode_open (e.inode_sector);
 	else
+{
 		*inode = NULL;
+}
 
   return *inode != NULL;
 }
