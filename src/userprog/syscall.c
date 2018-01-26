@@ -100,7 +100,7 @@ syscall_handler (struct intr_frame *f)
   case SYS_CREATE:
 		parse_args(esp, &args[0], 2);
     valid_ptr(args[0]);
-    valid_buf((char*)args[0], (unsigned)args[1]);
+    //valid_buf((char*)args[0], (unsigned)args[1]);
     valid_string((void*) args[0]);
     f->eax = create((const char*) args[0], (unsigned) args[1]);
     break;
