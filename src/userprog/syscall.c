@@ -31,6 +31,38 @@ bool readdir (int fd, char *name);
 bool mkdir (const char *filename);
 bool chdir (const char *filename);
 struct file_record * fileRd_ptr(int fd);
+
+
+
+
+
+static int
+get_user (const uint8_t *uaddr)
+{
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
+}
+ 
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool
+put_user (uint8_t *udst, uint8_t byte)
+{
+  int error_code;
+  asm ("movl $1f, %0; movb %b2, %1; 1:"
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
+}
+
+
+
+
+
+
+
 void
 syscall_init (void) 
 {
@@ -74,43 +106,43 @@ syscall_handler (struct intr_frame *f)
     break;
 	case SYS_REMOVE:
 		parse_args(esp, &args[0], 1);
-    		valid_ptr(args[0]);
-    		valid_string((void*) args[0]);
-    		f->eax = remove ((const char*) args[0]);
+    valid_ptr(args[0]);
+    valid_string((void*) args[0]);
+    f->eax = remove ((const char*) args[0]);
 		break;
 	case SYS_OPEN:
 		parse_args(esp, &args[0], 1);
-    		valid_ptr(args[0]);
-    		valid_string((void*) args[0]);
-    		f->eax = open ((const char*) args[0]);
+    valid_ptr(args[0]);
+    valid_string((void*) args[0]);
+    f->eax = open ((const char*) args[0]);
 		break;
 	case SYS_FILESIZE:
 		parse_args(esp, &args[0], 1);
-    		f->eax = filesize ((int) args[0]);
+    f->eax = filesize ((int) args[0]);
 		break;
 	case SYS_READ:
 		parse_args(esp, &args[0], 3);
-    		valid_ptr(args[1]);
-    		valid_buf((char*) args[1], (unsigned)args[2]);
-    		f->eax = read ((int) args[0], (void*) args[1], (unsigned) args[2]);
+    valid_ptr(args[1]);
+    valid_buf((char*) args[1], (unsigned)args[2]);
+    f->eax = read ((int) args[0], (void*) args[1], (unsigned) args[2]);
 		break;
 	case SYS_WRITE:
 		parse_args(esp, &args[0], 3);
-    		valid_ptr(args[1]);
-    		valid_buf((char*) args[1], (unsigned) args[2]);
-	  	f->eax = write((int) args[0], (const void*) args[1], (unsigned) args[2]);
+    valid_ptr(args[1]);
+    valid_buf((char*) args[1], (unsigned) args[2] - 1);
+	  f->eax = write((int) args[0], (const void*) args[1], (unsigned) args[2]);
 		break;
 	case SYS_SEEK:
 		parse_args(esp, &args[0], 2);
-    		seek ((int) args[0], (unsigned) args[1]);
+    seek ((int) args[0], (unsigned) args[1]);
 		break;
 	case SYS_TELL:
 		parse_args(esp, &args[0], 1);
-    		f->eax = tell ((int) args[0]);
+    f->eax = tell ((int) args[0]);
 		break;
 	case SYS_CLOSE:
 		parse_args(esp, &args[0], 1);
-    		close ((int) args[0]);
+    close ((int) args[0]);
 		break;
 	case SYS_CHDIR:
 		parse_args (esp, &args [0], 1);
@@ -351,8 +383,14 @@ lock_acquire(&filesys_mutex);
   }
 if (fd != 1)
  {
+
   struct file *tempfile;
   tempfile = file_ptr(fd);
+  if (inode_is_dir (file_get_inode(tempfile)))
+  {
+	lock_release (&filesys_mutex);
+	return -1;
+  }
   if (tempfile == NULL) {
     lock_release(&filesys_mutex);
     return -1;
