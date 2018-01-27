@@ -393,13 +393,13 @@ if (fd != 1)
 
   struct file *tempfile;
   tempfile = file_ptr(fd);
-  if (inode_is_dir (file_get_inode(tempfile)))
-  {
-	lock_release (&filesys_mutex);
-	return -1;
-  }
   if (tempfile == NULL) {
     lock_release(&filesys_mutex);
+    return -1;
+  }
+  if (inode_is_dir (file_get_inode(tempfile)))
+  {
+    lock_release (&filesys_mutex);
     return -1;
   }
  	int result = file_write (tempfile, buffer, length);
