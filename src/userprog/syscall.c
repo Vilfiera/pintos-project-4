@@ -129,7 +129,7 @@ syscall_handler (struct intr_frame *f)
 	case SYS_WRITE:
 		parse_args(esp, &args[0], 3);
     valid_ptr(args[1]);
-    valid_buf((char*) args[1], (unsigned) args[2] - 1);
+    valid_buf((char*) args[1], (unsigned) args[2]);
 	  f->eax = write((int) args[0], (const void*) args[1], (unsigned) args[2]);
 		break;
 	case SYS_SEEK:
@@ -516,9 +516,11 @@ static void valid_ptr(void* user_ptr) {
 
 static void valid_buf(char* buf, unsigned size) {
   int i;
-  for (i = 0; i < size; i++) {
+  valid_ptr(buf);
+  valid_ptr(buf + size - 1);
+ /* for (i = 0; i < size; i++) {
     valid_ptr(&buf[i]);
-  }
+  }*/
 }
 
 static void valid_string(void* string) {
