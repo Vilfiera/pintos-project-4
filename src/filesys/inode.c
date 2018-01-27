@@ -7,7 +7,7 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "filesys/cache.h"
-
+#include "threads/synch.h"
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
@@ -50,6 +50,9 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
+
+    struct lock inode_lock;             // Prevents multiple threads extending a file.
+    off_t readable_length;              // Prevents readers from reading unwritten zeroes.
   };
 
 static block_sector_t index_to_sector(const struct inode*, off_t);
@@ -169,24 +172,6 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
   }
   return success;
 }
-/*
-      if (free_map_allocate (sectors, &disk_inode->start)) 
-        {
-          cache_write (sector, disk_inode);
-          if (sectors > 0) 
-            {
-              static char zeros[BLOCK_SECTOR_SIZE];
-              size_t i;
-              
-              for (i = 0; i < sectors; i++) 
-                cache_write (disk_inode->start + i, zeros);
-            }
-          success = true; 
-        } 
-      free (disk_inode);
-    }
-  return success;
-}*/
 
 /* Reads an inode from SECTOR
    and returns a `struct inode' that contains it.
@@ -221,7 +206,9 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  lock_init(&inode->inode_lock);
   cache_read (inode->sector, &inode->data);
+  inode->readable_length = inode_length(inode);
   return inode;
 }
 
@@ -297,7 +284,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
-      off_t inode_left = inode_length (inode) - offset;
+      off_t inode_left = inode->readable_length - offset;
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
       int min_left = inode_left < sector_left ? inode_left : sector_left;
 
@@ -343,12 +330,16 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if (inode->deny_write_cnt)
     return 0;
   if (byte_to_sector(inode, offset + size - 1) == -1) {
+    lock_acquire(&inode->inode_lock);
     if (!inode_alloc(&inode->data, offset+size)) {
       // Error: could not extend file
+      lock_release(&inode->inode_lock);
       return 0;
     }
-    inode->data.length = offset+size;
+    inode->data.length = offset + size;
+    lock_release(&inode->inode_lock);
     cache_write(inode->sector, &inode->data);
+    inode->readable_length = inode->data.length;
   }
   while (size > 0) 
     {
