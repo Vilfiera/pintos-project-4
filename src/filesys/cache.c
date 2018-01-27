@@ -66,9 +66,9 @@ static struct cache_entry* cache_lookup (block_sector_t sector){
 			//cache hit
 			return &(cache[i]);
 		}
-		//cache miss
 	}
-return NULL;
+  //cache miss
+  return NULL;
 }
 //return free slot else evict a slot by implementing clock algo
 static struct cache_entry* cache_evict(){
@@ -101,7 +101,17 @@ static struct cache_entry* cache_evict(){
 
 //read into empty cache buffer's slot or evict and write to that slot
 void cache_read(block_sector_t sector, void *target){
-	lock_acquire(&mutex);
+  cache_read_partial(sector, target, 0, BLOCK_SECTOR_SIZE);
+}
+
+// Reads desired sector into given target, through the cache.
+// Allows user to specify the offset in the sector to start
+// reading from, as well as the length of the read.
+void cache_read_partial(block_sector_t sector, void *target, 
+                        size_t ofs, size_t length) {
+  lock_acquire(&mutex);
+  ASSERT(length <= BLOCK_SECTOR_SIZE);
+  ASSERT(ofs < BLOCK_SECTOR_SIZE);
 	struct cache_entry *slot = cache_lookup(sector); //check entry
 	//if not found
 	if(slot == NULL){
@@ -111,20 +121,26 @@ void cache_read(block_sector_t sector, void *target){
 		slot->disk_sector = sector;
 		slot->dirty = false;
 		block_read(fs_device, sector, slot->buffer);
-/*
-  block_read(fs_device, sector, target);
-	lock_release(&mutex);
-  return;*/
 	}
 	//copy data from cahce slot to memory
 	slot->lru = true;
-	memcpy(target, slot->buffer, BLOCK_SECTOR_SIZE);
+	memcpy(target, slot->buffer + ofs, length);
 	lock_release(&mutex);
-}
 
+}
 //write data from memory to cache and then to the disk
 void cache_write(block_sector_t sector, const void *source){
+  cache_write_partial(sector, source, 0, BLOCK_SECTOR_SIZE);
+}
+
+// Reads desired sector into given target, through the cache.
+// Allows user to specify the offset in the sector to start
+// writing from, as well as the length of the write.
+void cache_write_partial(block_sector_t sector, const void *source,
+                          size_t ofs, size_t length) {
 	lock_acquire(&mutex);
+  ASSERT(length <= BLOCK_SECTOR_SIZE);
+  ASSERT(ofs < BLOCK_SECTOR_SIZE);
 	struct cache_entry *slot = cache_lookup(sector);
 	if(slot == NULL){
 		slot = cache_evict ();
@@ -133,18 +149,11 @@ void cache_write(block_sector_t sector, const void *source){
 		slot->disk_sector = sector;
 		slot->dirty = false;
 		block_read(fs_device, sector, slot->buffer);
-/* 
-  block_write(fs_device, sector, source);
-	lock_release(&mutex);
-  return;
-*/
 	}
 	slot->lru = true;
 	slot->dirty = true;
-	memcpy(slot->buffer, source, BLOCK_SECTOR_SIZE);
+	memcpy(slot->buffer + ofs, source, length);
 	lock_release(&mutex);
 }
-
-
 
 
