@@ -22,8 +22,6 @@ static struct cache_entry cache[BUFFER_CACHE];
 
 static struct lock mutex;
 
-static size_t cache_accesses;
-
 void start_write_back() {
   thread_create("periodically_flush_cache", 0, cache_periodic_write, NULL);
 }
@@ -31,7 +29,6 @@ void start_write_back() {
 //initialization
 void cache_init(){
 	lock_init(&mutex);
-  cache_accesses = 0;
 	int i;
 	for (i = 0; i < BUFFER_CACHE; ++i){
 		cache[i].occupied = false;
@@ -115,17 +112,6 @@ void cache_read(block_sector_t sector, void *target){
   cache_read_partial(sector, target, 0, BLOCK_SECTOR_SIZE);
 }
 
-void cache_check() {
-  if (++cache_accesses % 20 == 0) {
-  size_t i = 0;
-  for (i = 0; i < BUFFER_CACHE; i++) {
-    if (!cache[i].occupied) {
-      continue;
-    }
-    cache_flush(&(cache[i]));
-  }
-  }
-}
 // Reads desired sector into given target, through the cache.
 // Allows user to specify the offset in the sector to start
 // reading from, as well as the length of the read.
@@ -134,7 +120,6 @@ void cache_read_partial(block_sector_t sector, void *target,
   lock_acquire(&mutex);
   ASSERT(length <= BLOCK_SECTOR_SIZE);
   ASSERT(ofs < BLOCK_SECTOR_SIZE);
-//	cache_check();
   struct cache_entry *slot = cache_lookup(sector); //check entry
 	//if not found
 	if (slot == NULL){
@@ -145,10 +130,9 @@ void cache_read_partial(block_sector_t sector, void *target,
 		slot->dirty = false;
 		block_read(fs_device, sector, slot->buffer);
 	}
-	//copy data from cahce slot to memory
+	//copy data from cache slot to memory
 	slot->lru = true;
 	memcpy(target, slot->buffer + ofs, length);
-//  cache_read_ahead(sector+1);
 	lock_release(&mutex);
 
 }
@@ -166,7 +150,6 @@ void cache_access(void* sectorPtr){
 		slot->dirty = false;
 		block_read(fs_device, sector, slot->buffer);
 	}
-	//copy data from cahce slot to memory
 	slot->lru = true;
   lock_release(&mutex);
 }
@@ -188,7 +171,6 @@ void cache_write(block_sector_t sector, const void *source){
 void cache_write_partial(block_sector_t sector, const void *source,
                           size_t ofs, size_t length) {
 	lock_acquire(&mutex);
-//	cache_check();
   ASSERT(length <= BLOCK_SECTOR_SIZE);
   ASSERT(ofs < BLOCK_SECTOR_SIZE);
 	struct cache_entry *slot = cache_lookup(sector);
