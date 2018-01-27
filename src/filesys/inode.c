@@ -309,10 +309,14 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       size -= chunk_size;
       offset += chunk_size;
       bytes_read += chunk_size;
-    }
-  free (bounce);
 
-  return bytes_read;
+      sector_idx = byte_to_sector(inode, offset);
+      if (sector_idx != -1) {
+        cache_read_ahead(sector_idx);
+      }
+    }
+
+    return bytes_read;
 }
 
 /* Writes SIZE bytes from BUFFER into INODE, starting at OFFSET.

@@ -9,3 +9,6 @@ void cache_write(block_sector_t sector, const void *source);
 void cache_write_partial(block_sector_t, const void *, size_t, size_t);
 void cache_periodic_write (void *aux); 
 void flush_entire_cache();
+void cache_access(void*);
+void cache_read_ahead(block_sector_t);
+void cache_read_ahead(block_sector_t sector);

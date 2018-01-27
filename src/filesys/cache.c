@@ -153,6 +153,30 @@ void cache_read_partial(block_sector_t sector, void *target,
 
 }
 
+void cache_access(void* sectorPtr){
+  lock_acquire(&mutex);
+  block_sector_t sector = *(block_sector_t*)sectorPtr;
+	struct cache_entry *slot = cache_lookup(sector); //check entry
+	//if not found
+	if (slot == NULL){
+		slot = cache_evict(); //evict slot
+		ASSERT(slot != NULL && slot->occupied == false);
+		slot->occupied = true;
+		slot->disk_sector = sector;
+		slot->dirty = false;
+		block_read(fs_device, sector, slot->buffer);
+	}
+	//copy data from cahce slot to memory
+	slot->lru = true;
+  lock_release(&mutex);
+}
+
+void cache_read_ahead(block_sector_t sector) {
+  block_sector_t *sectorPtr = malloc(sizeof(block_sector_t));
+  *sectorPtr = sector;
+  thread_create("cache_read_ahead", 0, cache_access, sectorPtr);
+}
+
 //write data from memory to cache and then to the disk
 void cache_write(block_sector_t sector, const void *source){
   cache_write_partial(sector, source, 0, BLOCK_SECTOR_SIZE);
