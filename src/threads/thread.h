@@ -82,7 +82,8 @@ typedef int tid_t;
    blocked state is on a semaphore wait list. */
 struct thread
   {
-	struct dir *cur_dir;
+    // current working directory
+  	struct dir *cur_dir;
     //exe file
     struct file *exefile;
     //bool parent waiting

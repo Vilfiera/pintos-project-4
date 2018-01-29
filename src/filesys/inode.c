@@ -330,7 +330,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 {
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
-  uint8_t *bounce = NULL;
   if (inode->deny_write_cnt)
     return 0;
   if (byte_to_sector(inode, offset + size - 1) == -1) {
@@ -377,7 +376,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       offset += chunk_size;
       bytes_written += chunk_size;
     }
-  free (bounce);
   return bytes_written;
 }
 
